@@ -56,6 +56,31 @@ public class TradeFinderConfig {
         return getEnchantmentRegistry(false);
     }
 
+    /**
+     * Look up an EnchantmentOption by registry resource key rather than Enchantment object reference.
+     * Direct {@code enchantments.get(enchantment)} fails on 1.21+ because Holder/registry indirection
+     * means the {@code Enchantment} instance returned from a server-sent offer can be a different
+     * Java object than the one we stored at config-load time. We fall back to comparing resource keys.
+     */
+    public EnchantmentOption findOptionForEnchantment(Enchantment enchantment) {
+        EnchantmentOption direct = enchantments.get(enchantment);
+        if (direct != null) {
+            return direct;
+        }
+        Registry<Enchantment> registry = getEnchantmentRegistry();
+        var offerKey = registry.getResourceKey(enchantment).orElse(null);
+        if (offerKey == null) {
+            return null;
+        }
+        for (var entry : enchantments.entrySet()) {
+            var entryKey = registry.getResourceKey(entry.getKey()).orElse(null);
+            if (entryKey != null && entryKey.equals(offerKey)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
     public void save() {
         try {
             Files.deleteIfExists(configFile);

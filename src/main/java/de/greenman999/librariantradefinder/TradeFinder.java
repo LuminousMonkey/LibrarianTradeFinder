@@ -61,6 +61,17 @@ public class TradeFinder {
     private static boolean finishedPlaceLook = false;
     private static boolean finishedCheckLook = false;
 
+    // Track whether we have already fired the once-per-cycle interact() in CHECK.
+    // Only re-armed when state is set back to CHECK (after PLACE). Prevents the
+    // every-tick interact spam that was happening previously while in WAITING_FOR_PACKET.
+    private static boolean checkInteractFired = false;
+
+    // Watchdog for the WAITING_FOR_PACKET state. If the villager grunts (busy / refused)
+    // or the offer packet otherwise never arrives, we'd be stuck forever. Count ticks
+    // since we entered WAITING_FOR_PACKET and retry the interact when a threshold elapses.
+    private static int waitTicks = 0;
+    private static final int WAIT_FOR_PACKET_TIMEOUT_TICKS = 40; // ~2s at 20 TPS
+
     public static void stop() {
         state = TradeState.IDLE;
 
@@ -68,6 +79,8 @@ public class TradeFinder {
         maxBookPrice = 0;
         minLevel = 0;
         tries = 0;
+        checkInteractFired = false;
+        waitTicks = 0;
 
         Minecraft.getInstance().gui.setOverlayMessage(Component.literal(""), false);
     }
@@ -180,7 +193,23 @@ public class TradeFinder {
             case SELECT_MANUAL -> HudUtils.overlayMessage(HudUtils.textTranslatable(ChatFormatting.GRAY, "librarian-trade-finder.actionbar.status.select-manual"), false);
         }
 
-        if((state == TradeState.CHECK || state == TradeState.WAITING_FOR_PACKET) && villager.getVillagerData().profession().is(VillagerProfession.LIBRARIAN)) {
+        // Watchdog: if we've been waiting on the offer packet for too long (villager grunted /
+        // refused / packet lost / desync), retry by going back to CHECK so we can re-fire interact.
+        if (state == TradeState.WAITING_FOR_PACKET) {
+            waitTicks++;
+            if (waitTicks > WAIT_FOR_PACKET_TIMEOUT_TICKS) {
+                waitTicks = 0;
+                checkInteractFired = false;
+                state = TradeState.CHECK;
+                return;
+            }
+        }
+
+        // Only fire the interact() in CHECK, and only once per cycle. WAITING_FOR_PACKET
+        // intentionally has no tick handler — the response packet drives the next transition
+        // (handled in ClientConnectionMixin). This eliminates the duplicate-interact spam.
+        if(state == TradeState.CHECK && !checkInteractFired
+                && villager.getVillagerData().profession().is(VillagerProfession.LIBRARIAN)) {
             Vec3 villagerPosition = new Vec3(villager.getX(), villager.getY() + (double) villager.getEyeHeight(Pose.STANDING), villager.getZ());
 
             if(LibrarianTradeFinder.getConfig().legitMode && LibrarianTradeFinder.getConfig().slowMode) {
@@ -218,6 +247,8 @@ public class TradeFinder {
             }
             if(result == InteractionResult.SUCCESS) {
                 finishedBreakLook = false;
+                checkInteractFired = true;
+                waitTicks = 0;
                 state = TradeState.WAITING_FOR_PACKET;
             }else {
                 HudUtils.chatMessage(HudUtils.textTranslatable("librarian-trade-finder.check.interact.failed", ChatFormatting.RED));
@@ -337,6 +368,10 @@ public class TradeFinder {
             }
 
             finishedCheckLook = false;
+            // Re-arm the once-per-cycle interact gate so the next CHECK can fire interact()
+            // exactly once (gated also on profession.is(LIBRARIAN), so it waits for the
+            // villager to actually claim the lectern).
+            checkInteractFired = false;
             state = TradeState.CHECK;
         }
         else if (state == TradeState.SELECT_MANUAL) {

@@ -53,7 +53,7 @@ public class ClientConnectionMixin {
                     int maxBookPrice;
                     int minLevel;
                     if (TradeFinder.searchAll) {
-                        TradeFinderConfig.EnchantmentOption enchantmentOption = LibrarianTradeFinder.getConfig().enchantments.get(enchantment);
+                        TradeFinderConfig.EnchantmentOption enchantmentOption = LibrarianTradeFinder.getConfig().findOptionForEnchantment(enchantment);
                         if (enchantmentOption == null || !enchantmentOption.isEnabled()) return;
                         maxBookPrice = enchantmentOption.getMaxPrice();
                         minLevel = enchantmentOption.getLevel();
