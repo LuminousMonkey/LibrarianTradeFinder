@@ -58,13 +58,27 @@ public class EnchantmentEntry extends AbstractSelectionList.Entry<EnchantmentEnt
         Font textRenderer = Minecraft.getInstance().font;
         Component enchantmentText = enchantment.description();
 
-        if (!maxPriceField.getValue().isEmpty() && !maxPriceField.canConsumeInput() &&
-                (Integer.parseInt(maxPriceField.getValue()) > 64 || Integer.parseInt(maxPriceField.getValue()) < 5)) {
-            maxPriceField.setValue("64");
+        // Per-enchant clamp: only fires on focus loss (incl. Tab to next field, Enter from our key handler,
+        // or click elsewhere). Computes valid bounds for THIS enchant at the current level using the same
+        // vanilla formula MiniHUD uses (with the DOUBLE_TRADE_PRICE tag handled).
+        if (!levelField.getValue().isEmpty() && !levelField.canConsumeInput()) {
+            int parsedLevel = Integer.parseInt(levelField.getValue());
+            int clampedLevel = Math.max(1, Math.min(parsedLevel, enchantment.getMaxLevel()));
+            if (clampedLevel != parsedLevel) {
+                levelField.setValue(String.valueOf(clampedLevel));
+            }
         }
-        if (!levelField.getValue().isEmpty() && !levelField.canConsumeInput() &&
-                (Integer.parseInt(levelField.getValue()) > enchantment.getMaxLevel() || Integer.parseInt(levelField.getValue()) < 1)) {
-            levelField.setValue(String.valueOf(enchantment.getMaxLevel()));
+        if (!maxPriceField.getValue().isEmpty() && !maxPriceField.canConsumeInput()) {
+            int currentLevel = !levelField.getValue().isEmpty()
+                    ? Integer.parseInt(levelField.getValue())
+                    : enchantment.getMaxLevel();
+            int min = TradeFinderConfig.computedMinPrice(enchantment, currentLevel);
+            int max = TradeFinderConfig.computedMaxPrice(enchantment, currentLevel);
+            int parsed = Integer.parseInt(maxPriceField.getValue());
+            int clamped = Math.max(min, Math.min(parsed, max));
+            if (clamped != parsed) {
+                maxPriceField.setValue(String.valueOf(clamped));
+            }
         }
 
         enchantmentOption.setEnabled(enabled);

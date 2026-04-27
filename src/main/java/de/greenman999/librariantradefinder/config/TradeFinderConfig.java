@@ -13,6 +13,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
+import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.world.item.enchantment.Enchantment;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -54,6 +55,45 @@ public class TradeFinderConfig {
 
     private static Registry<Enchantment> getEnchantmentRegistry() {
         return getEnchantmentRegistry(false);
+    }
+
+    /**
+     * Compute the minimum possible librarian trade price for a (enchantment, level) pair, applying
+     * the vanilla {@code 2× double-trade-price} multiplier when the enchantment is tagged for it
+     * (Mending, Frost Walker, Curses, etc.). Result is capped at the vanilla 64-emerald maximum.
+     */
+    public static int computedMinPrice(Enchantment enchantment, int level) {
+        int base = 2 + 3 * level;
+        if (isDoubleTradePrice(enchantment)) base *= 2;
+        return Math.min(64, base);
+    }
+
+    /**
+     * Compute the maximum possible librarian trade price for a (enchantment, level) pair. Same rules
+     * as {@link #computedMinPrice} but with the upper-bound coefficient.
+     */
+    public static int computedMaxPrice(Enchantment enchantment, int level) {
+        int base = 6 + 13 * level;
+        if (isDoubleTradePrice(enchantment)) base *= 2;
+        return Math.min(64, base);
+    }
+
+    /**
+     * Clamp a desired price into the valid {@code [computedMinPrice, computedMaxPrice]} range so
+     * we never store a target price the server can never roll.
+     */
+    public static int clampPrice(Enchantment enchantment, int level, int desired) {
+        return Math.max(computedMinPrice(enchantment, level),
+                        Math.min(desired, computedMaxPrice(enchantment, level)));
+    }
+
+    private static boolean isDoubleTradePrice(Enchantment enchantment) {
+        try {
+            return getEnchantmentRegistry().wrapAsHolder(enchantment)
+                    .is(EnchantmentTags.DOUBLE_TRADE_PRICE);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -189,7 +229,10 @@ public class TradeFinderConfig {
         }
 
         public EnchantmentOption(Enchantment enchantment, boolean enabled) {
-            this(enchantment, enabled, enchantment.getMaxLevel(), 64);
+            // Default a freshly-enabled enchantment to the cheapest possible price for its max level,
+            // so users get "best deal only" out of the box without having to know the formula.
+            this(enchantment, enabled, enchantment.getMaxLevel(),
+                 computedMinPrice(enchantment, enchantment.getMaxLevel()));
         }
 
         public static EnchantmentOption fromJson(JsonObject json) {
@@ -213,6 +256,10 @@ public class TradeFinderConfig {
         }
 
         public void setMaxPrice(int maxPrice) {
+            // Note: deliberately NOT clamping here. The config GUI calls this every render frame
+            // with whatever is currently in the maxPrice text field, including intermediate
+            // mid-typing values; clamping per-frame fights the user's edit. Clamping happens
+            // on the explicit-entry paths (Commands.java) and on the constructor default.
             this.maxPrice = maxPrice;
         }
 
