@@ -171,17 +171,13 @@ public class EnchantmentEntry extends AbstractSelectionList.Entry<EnchantmentEnt
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        // Adjust options by hovering the mouse over the text field and scrolling
-        // 'amount' is +1.0 or -1.0, sometimes +2.0 or +3.0 for mouse wheels that (physically) snap to positions.
-        // There are also mouse wheels that scroll smoothly; the current implementation maybe doesn't work properly with them
+        // Scroll-over-field adjusts maxPrice only. Level was deliberately removed: scrolling
+        // the enchantment list passes the cursor through level fields for one frame each,
+        // silently knocking levels down to 1 and corrupting search criteria. Click + type to
+        // change level instead.
         if (maxPriceField.isMouseOver(mouseX, mouseY)){
             enchantmentOption.setMaxPrice(Mth.clamp((int) (enchantmentOption.getMaxPrice() + verticalAmount), 5, 64));
             maxPriceField.setValue(String.valueOf(enchantmentOption.getMaxPrice()));
-            return true;
-        }
-        else if (levelField.isMouseOver(mouseX, mouseY)){
-            enchantmentOption.setLevel(Mth.clamp((int) (enchantmentOption.getLevel() + verticalAmount), 1, enchantment.getMaxLevel()));
-            levelField.setValue(String.valueOf(enchantmentOption.getLevel()));
             return true;
         }
         return false;

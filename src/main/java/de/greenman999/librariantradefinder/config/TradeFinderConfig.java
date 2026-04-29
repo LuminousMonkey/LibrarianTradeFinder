@@ -34,6 +34,8 @@ public class TradeFinderConfig {
     public boolean tpToVillager = false;
     public boolean legitMode = true;
     public boolean slowMode = false;
+    public boolean showCostRange = true;
+    public boolean debugLogOffers = false;
 
     public HashMap<Enchantment, EnchantmentOption> enchantments = new HashMap<>();
 
@@ -131,9 +133,14 @@ public class TradeFinderConfig {
             json.addProperty("tpToVillager", tpToVillager);
             json.addProperty("legitMode", legitMode);
             json.addProperty("slowMode", slowMode);
+            json.addProperty("showCostRange", showCostRange);
+            json.addProperty("debugLogOffers", debugLogOffers);
 
             JsonObject enchantmentsJson = new JsonObject();
 
+            // Always seed from the on-disk cache first so a save from the title screen (where
+            // the level isn't loaded and the live `enchantments` map is empty) preserves the
+            // user's per-enchant settings instead of overwriting the file with nothing.
             enchantmentConfigs.forEach((resLocation, enchantmentOption) ->
                     enchantmentsJson.add(resLocation, enchantmentOption.toJson()));
 
@@ -143,8 +150,8 @@ public class TradeFinderConfig {
                         enchantmentRegistry.wrapAsHolder(enchantment).unwrapKey().orElseThrow()
                                 .identifier().toString(),
                         enchantmentOption.toJson()));
-                json.add("enchantments", enchantmentsJson);
             }
+            json.add("enchantments", enchantmentsJson);
 
             Files.writeString(configFile, gson.toJson(json));
         } catch (IOException e) {
@@ -174,6 +181,10 @@ public class TradeFinderConfig {
                     legitMode = json.getAsJsonPrimitive("legitMode").getAsBoolean();
                 if (json.has("slowMode"))
                     slowMode = json.getAsJsonPrimitive("slowMode").getAsBoolean();
+                if (json.has("showCostRange"))
+                    showCostRange = json.getAsJsonPrimitive("showCostRange").getAsBoolean();
+                if (json.has("debugLogOffers"))
+                    debugLogOffers = json.getAsJsonPrimitive("debugLogOffers").getAsBoolean();
                 if (json.has("enchantments")) {
                     JsonObject enchantmentsJson = json.getAsJsonObject("enchantments");
                     enchantmentsJson.entrySet().forEach(entry -> {
